@@ -3,12 +3,54 @@ const app = express();
 const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config()
+const admin = require("firebase-admin");
+const serviceAccount = require("./smart-deals-firebase-admins.json");
 const port = process.env.PORT || 3000;
 
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
 
 //middleware
 app.use(cors());
 app.use(express.json());
+
+const logger = (req, res, next) => {
+    console.log("This is the logger functions");
+    next();
+}
+
+const verifyHeaders = async(req, res, next) => {
+
+    //check if there is authorization in the headers
+    if (!req.headers.authorization) {
+        console.log('No authorization found');
+        return res.status(401).send({ message: "Unauthorized Access" });
+    }
+    console.log("authorization found");
+
+    //getting the token inside of the authorization
+    const token = req.headers.authorization.split(" ")[1];
+    
+    //check if there is token in the headers
+    if (!token) {
+        console.log('No token found');
+        return res.status(401).send({ message: "Unauthorized access" });
+    }
+    console.log("Token found");
+
+    // if token is found then verify the token 
+    try {
+        const userInfo = await admin.auth().verifyIdToken(token)
+        req.token_email = userInfo.email;
+        console.log(userInfo)
+        next();
+    }
+    catch {
+        return res.status(401).send({ message: "Unauthorzed access" });
+    }
+    
+}
 
 
 // uri
@@ -46,14 +88,14 @@ async function run() {
         app.post("/users", async (req, res) => {
             const newUser = req.body;
             const email = req.body.email;
-            const query = { email:email };
+            const query = { email: email };
             const checkUser = await usersCollection.findOne(query);
             if (checkUser) {
                 res.send({ message: "User already exist, user wasn't inserted" })
             }
             else {
                 const result = await usersCollection.insertOne(newUser);
-                res.send(result);              
+                res.send(result);
             }
         })
 
@@ -79,7 +121,7 @@ async function run() {
 
         //get the latest products
         app.get("/latest-products", async (req, res) => {
-            const cursor = productsCollection.find().sort({created_at:1});
+            const cursor = productsCollection.find().sort({ created_at: 1 }).limit(6);
             const result = await cursor.toArray();
             res.send(result);
 
@@ -88,7 +130,7 @@ async function run() {
         //get the specific data by id from the mongoDB
         app.get("/products/:id", async (req, res) => {
             const id = req.params.id;
-            const query = { _id: id};
+            const query = { _id: new ObjectId(id) };
             const result = await productsCollection.findOne(query);
             res.send(result);
         })
@@ -124,14 +166,18 @@ async function run() {
         //bids related api
 
         //get the bids from the mongoDB
-        app.get("/bids", async (req, res) => {
+        app.get("/bids", logger,verifyHeaders,async (req, res) => {
 
+            console.log("Headers",req.headers.authorization)
             const email = req.query.buyer_email;
             const query = {};
             if (email) {
+                if (email !== req.token_email) {
+                    return res.status(403).send({message:"Forbidden access"})
+                }
                 query.buyer_email = email
             }
-            const cursor = bidsCollection.find(query);
+            const cursor = bidsCollection.find(query).sort({ bid_price: -1 });
             const result = await cursor.toArray();
             res.send(result);
         })
@@ -139,8 +185,8 @@ async function run() {
         //get the bids by the product
         app.get("/products/bids/:productId", async (req, res) => {
             const id = req.params.productId;
-            const query = { product : id };
-            const cursor = bidsCollection.find(query).sort({bid_price:-1});
+            const query = { product: id };
+            const cursor = bidsCollection.find(query).sort({ bid_price: -1 });
             const result = await cursor.toArray();
             res.send(result);
         })
@@ -155,7 +201,7 @@ async function run() {
         //delete the bid from the mongoDB by the product
         app.delete("/bids/:id", async (req, res) => {
             const id = req.params.id;
-            const query = {_id: new ObjectId(id) }
+            const query = { _id: new ObjectId(id) }
             const result = await bidsCollection.deleteOne(query);
             res.send(result);
         })
