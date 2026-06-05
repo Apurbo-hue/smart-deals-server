@@ -9,7 +9,7 @@ const serviceAccount = require("./smart-deals-firebase-admins.json");
 const port = process.env.PORT || 3000;
 
 admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
+    credential: admin.credential.cert(serviceAccount)
 });
 
 //middleware
@@ -23,18 +23,17 @@ const logger = (req, res, next) => {
 
 
 //verify firebase token 
-const verifyFireBaseToken = async(req, res, next) => {
+const verifyFireBaseToken = async (req, res, next) => {
 
     //check if there is authorization in the headers
     if (!req.headers.authorization) {
         console.log('No authorization found');
         return res.status(401).send({ message: "Unauthorized Access" });
     }
-    console.log("authorization found");
 
     //getting the token inside of the authorization
     const token = req.headers.authorization.split(" ")[1];
-    
+
     //check if there is token in the headers
     if (!token) {
         console.log('No token found');
@@ -52,7 +51,7 @@ const verifyFireBaseToken = async(req, res, next) => {
     catch {
         return res.status(401).send({ message: "Unauthorzed access" });
     }
-    
+
 }
 
 //verify custom jwt token
@@ -101,7 +100,7 @@ async function run() {
         app.post("/getToken", (req, res) => {
             const loggedUser = req.body;
             const token = jwt.sign(loggedUser, process.env.JWT_SECRET, { expiresIn: '7d' })
-            res.send({token});
+            res.send({ token });
             console.log("token", token)
         })
 
@@ -166,7 +165,7 @@ async function run() {
         })
 
         // insert the data to the mongoDB
-        app.post("/products", async (req, res) => {
+        app.post("/products",verifyFireBaseToken, async (req, res) => {
             const newProduct = req.body;
             const result = await productsCollection.insertOne(newProduct);
             res.send(result);
@@ -208,8 +207,9 @@ async function run() {
 
 
         //get the bids from the mongoDB with the firebase verification
-        app.get("/bids",verifyFireBaseToken, async (req, res) => {
-            const email = req.query.email;
+        app.get("/bids", verifyFireBaseToken, async (req, res) => {
+            const email = req.query.buyer_email;
+            console.log("this is the user email",email);
             const query = {};
             if (email) {
                 query.buyer_email = email;
@@ -222,7 +222,15 @@ async function run() {
         })
 
         //get the bids by the product
-        app.get("/products/bids/:productId",logger,verifyFireBaseToken, async (req, res) => {
+        // app.get("/products/bids/:productId",logger,verifyFireBaseToken, async (req, res) => {
+        //     const id = req.params.productId;
+        //     const query = { product: id };
+        //     const cursor = bidsCollection.find(query).sort({ bid_price: -1 });
+        //     const result = await cursor.toArray();
+        //     res.send(result);
+        // })
+
+        app.get("/products/bids/:productId",logger, async (req, res) => {
             const id = req.params.productId;
             const query = { product: id };
             const cursor = bidsCollection.find(query).sort({ bid_price: -1 });
@@ -241,7 +249,7 @@ async function run() {
         app.delete("/bids/:id", async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) }
-            const result = await bidsCollection.deleteOne(query).toArray();
+            const result = await bidsCollection.deleteOne(query);
             res.send(result);
         })
 
