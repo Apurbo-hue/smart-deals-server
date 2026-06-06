@@ -5,7 +5,9 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const jwt = require('jsonwebtoken');
 require('dotenv').config()
 const admin = require("firebase-admin");
+
 const serviceAccount = require("./smart-deals-firebase-admins.json");
+
 const port = process.env.PORT || 3000;
 
 admin.initializeApp({
@@ -39,7 +41,6 @@ const verifyFireBaseToken = async (req, res, next) => {
         console.log('No token found');
         return res.status(401).send({ message: "Unauthorized access" });
     }
-    console.log("Token found");
 
     // if token is found then verify the token 
     try {
@@ -90,6 +91,7 @@ const client = new MongoClient(uri, {
 async function run() {
     try {
         await client.connect();
+        console.log("mongodb connected")
 
         const db = client.db("smart_db");
         const productsCollection = db.collection("products");
@@ -97,12 +99,12 @@ async function run() {
         const usersCollection = db.collection("users");
 
         //jwt related api
-        app.post("/getToken", (req, res) => {
-            const loggedUser = req.body;
-            const token = jwt.sign(loggedUser, process.env.JWT_SECRET, { expiresIn: '7d' })
-            res.send({ token });
-            console.log("token", token)
-        })
+        // app.post("/getToken", (req, res) => {
+        //     const loggedUser = req.body;
+        //     const token = jwt.sign(loggedUser, process.env.JWT_SECRET, { expiresIn: '7d' })
+        //     res.send({ token });
+        //     console.log("token", token)
+        // })
 
         //user related api
 
@@ -230,7 +232,7 @@ async function run() {
         //     res.send(result);
         // })
 
-        app.get("/products/bids/:productId",logger, async (req, res) => {
+        app.get("/products/bids/:productId",async (req, res) => {
             const id = req.params.productId;
             const query = { product: id };
             const cursor = bidsCollection.find(query).sort({ bid_price: -1 });
@@ -253,15 +255,17 @@ async function run() {
             res.send(result);
         })
 
-        await client.db("admin").command({ ping: 1 });
-        console.log("connected to the mongoDB");
+        // await client.db("admin").command({ ping: 1 });
+        console.log("routes registered");
     }
-    finally {
-
+    catch (err)  {
+        console.log(err)
     }
 }
 
-run().catch(console.dir);
+run().catch((err) => {
+    console.error("Fatal run error ",err)
+});
 
 app.get("/", (req, res) => {
     res.send("Hello World");
@@ -270,3 +274,4 @@ app.get("/", (req, res) => {
 app.listen(port, () => {
     console.log(`the site is live on the port${port}`)
 })
+
